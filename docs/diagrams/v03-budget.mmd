@@ -1,0 +1,15 @@
+flowchart TB
+  A["모든 AI 요청<br/>분류 · 초안 · Critic<br/>Eval · Diagnose · 확장팀"] --> P["입력·schema·출력 상한 검사<br/>고정 모델·가격 버전"]
+  P --> Q{"영속 예약 원장<br/>소비 + 예약 + 다음 호출<br/>≤ $0.80 ?"}
+  Q -->|불가 / 미검증| PA["신규 유료 호출 정지<br/>캠페인 총액 $1<br/>여유 $0.20"]
+  Q -->|가능| RE["트랜잭션으로 예약<br/>request ID 고정"]
+  RE --> SENT["SENT 영속 기록<br/>모델 호출 1회"]
+  SENT --> OK{"usage 확인?"}
+  OK -->|성공·확인| SET["실제 비용 정산<br/>남은 예약 해제"]
+  OK -->|timeout / 유실 / 미보고| UN["UNKNOWN_CHARGE<br/>예약 유지 · 자동 재호출 금지"]
+  UN --> PA
+  SET --> LED["누적 원장 보존<br/>재시작·날짜 변경으로 리셋 없음"]
+  classDef stop fill:#3b3020,stroke:#f4c76b,color:#fff1d6;
+  classDef good fill:#18382d,stroke:#6ed6a1,color:#e6fff0;
+  class PA,UN stop;
+  class SET,LED good;

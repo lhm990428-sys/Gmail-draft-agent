@@ -1,0 +1,19 @@
+# Copy to application.toml only when changing the local runtime defaults.
+llm_mode = "openai"
+model = "gpt-5.4-mini-2026-03-17"
+allow_real_mail_export = false
+allow_gmail_draft_write = false
+trace_enabled = true
+label = "agent-test"
+max_calls = 12
+max_output_tokens = 1200
+token_budget = 20000
+active_timeout_seconds = 120
+daily_call_limit = 100
+session_seconds = 28800
+artifact_days = 7
+# Enable only after approving real mail processing. The default sample stays off.
+automatic_mail = false
+economy_profile = false
+poll_seconds = 30
+auto_daily_messages = 100

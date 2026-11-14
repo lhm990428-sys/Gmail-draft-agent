@@ -1,0 +1,4 @@
+name: hermes-mail-runtime
+version: 0.3.0
+description: "Restricted local LangGraph command gateway; no Gmail credentials or approvals"
+author: Local study project

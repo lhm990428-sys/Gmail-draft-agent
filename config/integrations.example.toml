@@ -1,0 +1,12 @@
+# Non-secret configuration only. Copy to config/local.toml after account choices.
+environment = "dev"
+llm_provider = "unconfigured"
+llm_model = ""
+langsmith_region = "unconfigured"
+langsmith_project = "hermes-mail-dev-setup"
+# UUID shown in LangSmith workspace settings; empty only for a single workspace key.
+langsmith_workspace_id = ""
+hermes_product = "nousresearch/hermes-agent"
+# Pinned source checkout path, once Hermes is installed and reviewed.
+hermes_checkout = ""
+# Setup phase never grants mail writes or exports real mail content.

@@ -1,0 +1,17 @@
+import {useState} from 'react';
+import {useQuery,useQueryClient} from '@tanstack/react-query';
+import {useSearchParams} from 'react-router-dom';
+import {api} from './api';
+
+const statusNames:Record<string,string>={queued:'AI 분류 대기',processing:'에이전트 처리 중',review:'검토 대기',done:'처리 완료',excluded:'광고 규칙 제외 · AI 호출 없음',needs_review:'본문 수동 확인 필요',error:'처리 중단 · 재호출 없음'};
+export function GmailMailbox({notify}:{notify:(s:string)=>void}){
+ const query=useQuery({queryKey:['gmail-mailbox'],queryFn:api.mailbox,refetchInterval:5000});
+ const [params,setParams]=useSearchParams();const [busy,setBusy]=useState(false);const client=useQueryClient();
+ const [expanded,setExpanded]=useState(true);
+ if(query.isPending)return <p role="status">Gmail 자동 수집 상태 확인 중…</p>;
+ if(query.isError)return <p role="alert">Gmail 상태 조회 실패: {query.error.message} <button onClick={()=>void query.refetch()}>다시 확인</button></p>;
+ const data=query.data;if(!data.enabled)return null;
+ const selected=data.items.find(i=>i.id===params.get('inbox'));
+ const toggle=async()=>{setBusy(true);try{await api.mailboxControl(!data.paused);await client.invalidateQueries({queryKey:['gmail-mailbox']});notify(data.paused?'새 메일 자동 처리 재개':'자동 수집·신규 처리 일시정지 · 이미 시작한 처리는 계속됩니다.');}catch(e){notify(e instanceof Error?e.message:'상태 변경 실패');}finally{setBusy(false);}};
+ return <section className="gmail-mailbox" aria-label="실제 Gmail 받은편지함"><div className="gmail-mailbox-heading"><div><h2>최근 72시간 · 실제 Gmail</h2><p>{data.paused?'자동 처리 일시정지':data.error?'연결 확인 필요':'새 메일 자동 감지 중'} · {data.pollSeconds}초 간격 · Gmail 저장·발송 없음</p><small>마지막 확인 {data.lastChecked?new Date(data.lastChecked).toLocaleString():'첫 수집 대기'} · 마지막 성공 {data.lastSuccess?new Date(data.lastSuccess).toLocaleTimeString():'없음'}</small></div><div><button onClick={()=>void query.refetch()} disabled={query.isFetching}>상태 새로고침</button><button onClick={()=>void toggle()} disabled={busy}>{data.paused?'자동 처리 재개':'자동 처리 일시정지'}</button></div></div><p className="muted">명확한 광고는 규칙으로 제외하고, 나머지는 AI가 분류합니다. 회신이 필요한 메일만 초안을 만듭니다. 누적 금액 제한은 설정하지 않았습니다.</p>{data.limitReason&&<p role="status">{data.limitReason}</p>}{data.error&&<p className="inline-error" role="alert">수집 오류: {data.error} · 다음 확인 때 다시 시도합니다. OAuth 만료 시 재인증이 필요합니다.</p>}<button aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?'받은편지함 목록 접기':`받은편지함 목록 보기 · ${data.items.length}건`}</button>{expanded&&<><div className="table-wrap"><table><thead><tr><th>받은 시각</th><th>발신자·제목</th><th>처리 상태</th><th>과정</th></tr></thead><tbody>{data.items.map(i=><tr key={i.id}><td>{new Date(i.receivedAt).toLocaleString()}</td><td><button className="gmail-mail-subject" onClick={()=>setParams(i.runId?{run:i.runId,inbox:i.id}:{inbox:i.id})}>{i.subject}</button><small>{i.sender||i.address}</small></td><td>{statusNames[i.status]??i.status}{i.decision&&<small>{i.decision==='NO_REPLY'?'회신 불필요':i.decision==='REPLY_REQUIRED'?'회신 필요':i.decision==='REVIEW_REQUIRED'?'사람 판단 필요':i.decision}</small>}{i.reason&&<small>{i.reason}</small>}</td><td>{i.runId?<a href={`/?run=${encodeURIComponent(i.runId)}&inbox=${i.id}`}>처리 과정 보기</a>:'자동 대기·제외'}</td></tr>)}</tbody></table>{!data.items.length&&<p>최근 72시간 받은편지함을 확인 중입니다. 앱이 켜진 상태에서 자신에게 테스트 메일을 보내면 자동으로 감지합니다.</p>}</div>{selected&&!selected.runId&&<p role="status">{selected.subject} — {statusNames[selected.status]??selected.status}. {selected.reason??'분류가 시작되면 처리 과정과 초안이 아래에 표시됩니다.'}</p>}</>}</section>;
+}

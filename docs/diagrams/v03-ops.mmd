@@ -1,0 +1,21 @@
+flowchart TB
+  A["업무 실행 · 수집 · 규칙 · 감독<br/>AI · 예산 · 오류 · 사람 검토"] --> L["로컬 암호화 상세 + 이벤트 원장<br/>run / task / release / request ID"]
+  L --> O["Durable Outbox<br/>metadata · usage · 점수 · hash"]
+  O --> LS["LangSmith US<br/>root → controller / agent / tool → LLM"]
+  LS --> RB["서버 조회 대사<br/>전송 누락·비활성은 미완료 표시"]
+  L --> EV["Eval<br/>정답 있는 분류 점수<br/>독립 evaluator / Critic 분리"]
+  L --> OB["Observe<br/>토큰 · 지연 · 추정 비용<br/>수집 지연 · 예약·미정산"]
+  RB --> OB
+  EV --> DI["Diagnose<br/>코드 건강 진단 자동<br/>AI 원인 가설은 명시 요청"]
+  OB --> DI
+  DI --> GA{"같은 release의 규칙 판정"}
+  GA --> DE["DEBUG<br/>기술·안전 결함"]
+  GA --> HO["HOLD<br/>표본·계측·복구 증거 부족"]
+  GA --> IM["IMPROVE<br/>품질·성능 미달"]
+  GA --> RD["READY FOR APPROVAL<br/>모든 근거 통과 후 사람 승인"]
+  classDef stop fill:#3b3020,stroke:#f4c76b,color:#fff1d6;
+  classDef good fill:#18382d,stroke:#6ed6a1,color:#e6fff0;
+  classDef fail fill:#3d2229,stroke:#ff8a8a,color:#ffe9ed;
+  class HO,IM stop;
+  class RD good;
+  class DE fail;

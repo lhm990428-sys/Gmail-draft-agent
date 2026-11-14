@@ -1,0 +1,26 @@
+import {test,expect} from '@playwright/test';
+import {readFileSync,mkdirSync} from 'node:fs';
+test('automatic inbox without selecting a mail, local review and pause',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ const token=JSON.parse(readFileSync('../.local/browser-test-control.json','utf8')).token;
+ await page.goto('/#console='+token);
+ await expect(page.getByRole('heading',{name:'최근 72시간 · 실제 Gmail'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'자동 처리 일시정지',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'자동 수신 테스트 · 일정 회신 요청',exact:true})).toBeVisible({timeout:25000});
+ await expect(page.getByLabel('회신 초안 편집')).toBeVisible({timeout:25000});
+ await expect(page.getByRole('cell',{name:/광고 규칙 제외 · AI 호출 없음/})).toBeVisible();
+ const initial=await page.request.get('/api/v1/mailbox');const rows=(await initial.json()).items;
+ expect(rows.filter((r:{runId:string|null})=>r.runId)).toHaveLength(1);
+ await page.getByRole('button',{name:'검토 완료',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'검토 완료',exact:true}).click();
+ await expect(page.getByRole('status').filter({hasText:'앱 내부 검토 완료 · Gmail 저장·발송 없음'})).toBeVisible();
+ await page.getByRole('button',{name:'자동 처리 일시정지',exact:true}).click();
+ await expect(page.getByRole('button',{name:'자동 처리 재개',exact:true})).toBeVisible();
+ mkdirSync('test-results-auto/screens',{recursive:true});
+ await page.screenshot({path:'test-results-auto/screens/mailbox-1440.png',fullPage:true});
+ await page.setViewportSize({width:390,height:900});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await page.screenshot({path:'test-results-auto/screens/mailbox-390.png',fullPage:true});
+ await page.goto('/supervision');await expect(page.getByText('Supervisor · CODE',{exact:true}).first()).toBeVisible();
+ expect(errors).toEqual([]);
+});
