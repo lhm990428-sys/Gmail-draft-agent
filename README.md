@@ -1,48 +1,54 @@
-# Gmail Reply Triage Agent
+# Hermes Gmail Reply Agent
 
-Supervisor가 전문 에이전트를 계획·위임·검토하는 LangGraph 기반 로컬 에이전트 환경입니다. 첫 업무는 Gmail 회신 필요 분류와 초안 생성이며, LangSmith 중심 LLMOps가 전체 이벤트 이력·Eval·Observe·Diagnose·Release 판단을 연결합니다.
+Gmail 받은편지함에서 회신이 필요한 메일을 찾아 답장 초안을 만드는 로컬 에이전트입니다. 메일을 직접 골라 실행할 필요 없이 새 수신을 확인하고, 초안과 판단 근거를 웹 콘솔에서 검토할 수 있습니다.
 
-## 현재 단계
+[빠른 시연](#빠른-시연) · [처리 흐름](#처리-흐름) · [검증 결과](#검증-결과) · [실제 Gmail 연결](#실제-gmail-연결)
 
-**2026-11-02 최신 변경:** 사용자 지시로 기존 화이트톤을 유지하고 자동 Gmail 처리 구현·검증을 진행했습니다. 블랙톤 목업과 누적 $1 예산 통제는 취소했습니다. [실제 Gmail 자동 처리 안내](docs/18-automatic-gmail-review.md)가 최신 기준입니다.
+![메일 작업실에서 합성 메일의 분류 결과와 초안을 검토하는 화면](docs/screenshots/mail-workbench.png)
 
-- [x] 1. 설계 및 PRD v0.2 — 사용자 승인 완료
-- [x] 2. 화면 목업 — 작업 흐름 중심 재설계, 사용자 승인 완료 (2026-11-01)
-- [x] 3. Tool 셋업 및 연동 — 연결 점검 후 사용자가 4단계 진행 승인 (2026-11-02)
-- [ ] 4. 구축 — 실제 로컬 실행본 구현, 개발 검증 후 사용자 검수 대기
-- [ ] 5. 기능 검증
-- [ ] 6. LangSmith LLMOps 진단 시연
+*README의 화면은 합성 데이터 모드에서 캡처했습니다.*
 
-## 설계 문서
+## 처리 흐름
 
-- [PRD](docs/01-prd.md)
-- [아키텍처](docs/02-architecture.md)
-- [보안 및 LLMOps](docs/03-security-and-llmops.md)
-- [설계 승인 요약](docs/04-approval-review.md)
-- [기술스택 및 디자인 계약](docs/05-technology-stack.md)
-- [목업 검수 가이드](docs/06-frontend-review.md)
-- [프론트엔드 API 계약](docs/07-api-contract.md)
-- [뎁스 2 상세 화면·시나리오 검수](docs/08-depth2-scenarios.md)
-- [작업 흐름 재설계](docs/09-workflow-redesign.md)
-- [3단계 셋업·연동 현황](docs/10-tool-setup.md)
-- [처음 하는 계정·키 발급 안내](docs/11-account-setup-guide.md)
-- [실제 연결 점검 결과](docs/12-integration-check.md)
-- [4단계 구축 기록](docs/13-build-progress.md)
-- [실제 앱 실행·검수 안내](docs/14-runtime-review.md)
+```mermaid
+flowchart TD
+    inbox["Gmail 받은편지함 · 최근 72시간"] --> filter{"중복·광고 규칙"}
+    filter -->|"제외"| skip["모델 호출 없이 종료"]
+    filter -->|"처리 대상"| triage["분류 에이전트 · 회신 필요 여부"]
+    triage --> supervisor{"LangGraph 감독 · 분류와 위험 신호 확인"}
+    supervisor -->|"회신 불필요"| done["처리 완료"]
+    supervisor -->|"위험 또는 불확실"| review["사람 검토"]
+    supervisor -->|"회신 필요"| draft["초안 에이전트"]
+    draft --> critic["Critic · 근거·누락·어조 검토"]
+    critic --> review
+    review --> local["로컬 앱에서 수정·검토 완료"]
+    triage -.-> trace["실행 이력 · 토큰 · 지연"]
+    critic -.-> trace
+    trace --> ops["LangSmith 추적 및 LLMOps 판단실"]
+```
 
-## 실제 앱 실행 (4단계)
+비용 절약 모드에서는 분류에 모델을 한 번 호출하고, 회신이 필요한 경우에만 초안 작성과 Critic 호출을 추가합니다. 명확한 광고는 로컬 규칙으로 걸러냅니다. Gmail 연결은 읽기 전용이며 초안은 로컬 앱에서 검토합니다.
 
-**현재 사용자 승인: 실제 Gmail + 실제 OpenAI 자동 처리.** 최근 72시간 INBOX와 새 수신을 수집하며 비용 절약 profile(분류 1회, 필요 시 초안·Critic 각 1회)을 사용합니다. 누적 금액 상한은 없습니다. LangSmith 신규 전송은 사용자 요청으로 재개했습니다. Gmail 저장·발송은 계속 꺼져 있습니다. [사용·일시정지·검수 방법](docs/18-automatic-gmail-review.md)을 먼저 확인하세요.
+## 한 건의 실행을 따라가는 화면
 
-프로젝트 폴더의 **`Open-Console.cmd`를 더블클릭**합니다. Hermes Gateway와 로컬 서버가 시작되면 인증된 브라우저가 열립니다. 약 1분까지 걸릴 수 있습니다. 화면 주소는 `http://127.0.0.1:8000/`이며, 처음 로그인하려면 실행기가 열어 준 탭을 사용합니다. 종료할 때 실행 창에서 `Ctrl+C`를 누릅니다.
+| 화면 | 확인할 수 있는 것 |
+|---|---|
+| [메일 작업실](docs/screenshots/mail-workbench.png) | 원문, 분류 이유, 회신 초안, 사람 검토 |
+| [실행 감독](docs/screenshots/supervision.png) | 에이전트 노드, 실행 경로, 단계별 상태 |
+| [LLMOps 판단실](docs/screenshots/llmops.png) | 평가 점수, 토큰·지연, 진단, 버전별 배포 판단 |
 
-메일 작업실 상단의 실제 Gmail 목록은 자동 갱신됩니다. 메일을 선택하거나 실행 버튼을 눌러야 처리되는 구조가 아닙니다. 일시정지는 화면 버튼으로 제어하고 종료는 실행 창 Ctrl+C를 사용합니다. 실제 provider 토큰·추정 비용을 로컬에서 관측하며 일일 호출 상한은 UTC 날짜별 100회입니다.
+<details>
+<summary>실행 감독과 LLMOps 화면 보기</summary>
 
-현재 Gmail 인증은 readonly입니다. 승인된 최근 수신 본문을 OpenAI로 전송해 처리하며, Gmail Draft 쓰기는 꺼져 있습니다. 실제 Gmail 메일의 검토 완료는 앱 안의 기록만 변경합니다. LangSmith의 기존 trace를 유지하고, 대기 기록과 새 이벤트를 metadata·usage·점수 중심으로 전송·서버 조회 대사합니다.
+![노드와 엣지로 실행 경로를 확인하는 실행 감독 화면](docs/screenshots/supervision.png)
 
-운영 판정은 현재 **HOLD**입니다. 개발용 합성 2건의 평가와 개발 테스트는 정식 holdout·shadow·복구 인증을 대신하지 않습니다. Canary 기능은 로컬 manifest 활성화 기록만 지원하며 외부 운영 서버에 코드를 배포하지 않습니다. [기능 범위와 검수 안내](docs/14-runtime-review.md)
+![평가·관측·진단 결과를 함께 확인하는 LLMOps 판단실 화면](docs/screenshots/llmops.png)
 
-## 목업 실행
+</details>
+
+## 빠른 시연
+
+**Node.js 22.12 이상**에서 프런트엔드의 합성 데이터 모드를 실행합니다. Gmail이나 모델 API 키 없이 둘러볼 수 있습니다.
 
 ```powershell
 cd frontend
@@ -50,16 +56,40 @@ npm ci
 npm run dev
 ```
 
-브라우저에서 http://127.0.0.1:5173/ 를 엽니다. 현재는 합성 데이터이며 실제 Gmail/LLM/LangSmith 호출, Draft 저장, 배포는 하지 않습니다. 동작 상태는 브라우저 새로고침 시 초기화됩니다.
+[메일 작업실](http://127.0.0.1:5173/)에서 합성 메일을 열고, [실행 감독](http://127.0.0.1:5173/supervision)과 [LLMOps 판단실](http://127.0.0.1:5173/operations)을 확인합니다. [시나리오 검수](http://127.0.0.1:5173/scenarios)에서는 성공과 실패·복구 흐름을 살펴볼 수 있습니다.
 
-상세 화면·정상/실패/복구 흐름은 http://127.0.0.1:5173/scenarios 에서 검수할 수 있습니다. 시나리오별 검수 의견은 브라우저에만 저장되며 실제 메일/배포 승인이 아닙니다.
+## 검증 결과
 
-2026-10-29 재설계: 주 탐색을 **메일 작업실(`/`) / LLMOps 판단실(`/operations`) / 실행 감독(`/supervision`)**으로 통합했습니다. 메일과 릴리스 맥락을 유지하면서 근거·과정·결과를 확인합니다. 실행 감독은 합성 이벤트에 연결된 node/edge/task/public-memory 검사기이며 실제 LangGraph 연동이 아닙니다. 기존 상세 원장은 보조 탐색으로 유지합니다. [재설계 계약 및 검수 안내](docs/09-workflow-redesign.md)
+| 항목 | 확인한 결과 |
+|---|---|
+| 실제 메일 | 별도 계정에서 보낸 테스트 메일을 자동 감지하고 회신 초안 생성 |
+| 실행 추적 | 실제 Gmail 실행 19건의 LangSmith 전달 커버리지 100%. 전송 재개 후 기존 대기 이벤트 852개를 전송하고 원격에서 대조 |
+| 개발 평가 | 합성 사례 2건. 분류 결과와 정답 라벨을 대조하고 초안의 근거·요청 반영·어조를 별도 평가 |
+| 자동화 테스트 | 백엔드 48건, 실제 API 흐름과 자동 메일함 브라우저 테스트 각 1건 통과 |
 
-`npm run build`는 TypeScript 검사와 production 번들 빌드, `npm run test:e2e`는 화면/사용자 흐름 검증입니다. 테스트는 기본적으로 Windows Chrome 경로를 사용하며 다른 환경에서는 `PLAYWRIGHT_CHROME_PATH`를 지정합니다.
+위 수치는 구현 당시의 검증 기록입니다. 운영 판정은 **HOLD**이며, 운영 수준의 분류 정확도와 초안 채택률은 미측정입니다. [검증 및 운영 범위](docs/18-automatic-gmail-review.md)
 
-## 기본 안전 원칙
+## 실제 Gmail 연결
 
-각 단계 완료 후 사용자가 직접 검수합니다. 사용자의 4단계 진행 승인에 따라 실제 하네스·백엔드·프론트 연동을 구현했습니다. 5단계 정식 기능 검증과 6단계 LLMOps 진단 시연은 아직 사용자 승인 전입니다.
+Windows의 로컬 런타임은 Python·Node.js 환경과 Gmail OAuth, OpenAI API 설정이 필요합니다. LangSmith를 연결하면 전송 기록을 조회할 수 있습니다.
 
-MVP는 사람 승인 후 Gmail Draft만 저장합니다. gmail.compose 권한에 발송이 포함되므로 Tool Broker에서 발송 경로를 차단하도록 설계합니다. Supervisor와 Diagnose는 권한/배포 승인을 스스로 변경할 수 없습니다.
+1. [도구 설치](docs/10-tool-setup.md)와 [계정·키 설정](docs/11-account-setup-guide.md)을 따라 환경을 구성합니다.
+2. `frontend`에서 `npm ci`와 `npm run build:api`를 실행합니다.
+3. 프로젝트 루트에서 `Open-Console.cmd`를 실행하고 자동으로 열린 인증 탭을 사용합니다.
+4. 실제 메일 본문을 모델에 전송하기 전에 [자동 처리 설정과 데이터 범위](docs/18-automatic-gmail-review.md)를 확인합니다.
+
+실제 메일 분류에 필요한 본문은 OpenAI로 전달됩니다. LangSmith에는 메일 본문·주소·초안 대신 실행 메타데이터, 토큰 사용량, 지연, 점수를 기록합니다. 자격 증명은 Windows Credential Manager를 사용합니다.
+
+## 기술 구성
+
+| 영역 | 기술 |
+|---|---|
+| 에이전트 | LangGraph, GPT-5.4 mini, Nous Research Hermes Gateway |
+| 백엔드·저장 | Python 3.12, FastAPI, SQLite 체크포인트, Gmail API와 OAuth 2.0 |
+| 관측·평가 | LangSmith Trace와 Experiments, 로컬 릴리스 기준 |
+| 웹 콘솔 | React, TypeScript, Vite, React Flow, Recharts |
+| 테스트 | pytest, Playwright |
+
+개인 실습 프로젝트입니다. 요구사항과 검수 기준은 직접 정했고, Codex를 활용해 설계 초안·코드·테스트를 작성했습니다. Gmail을 연결한 뒤 다른 계정에서 테스트 메일을 보내 자동 처리 흐름을 직접 확인했습니다.
+
+[PRD](docs/01-prd.md) · [시스템 설계](docs/02-architecture.md) · [보안 및 LLMOps](docs/03-security-and-llmops.md)
